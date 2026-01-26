@@ -5,6 +5,8 @@ from pydantic import BaseModel, Field
 
 from services.device_sim.app.core.protocol import SimModel
 from services.device_sim.app.core.state import DeviceState
+from qaharness.transport.framing import encode_frame, decode_frame, FrameError
+from qaharness.transport import msgtypes as mt
 
 HTTP_HOST = os.getenv("SIM_HTTP_HOST", "127.0.0.1")
 HTTP_PORT = int(os.getenv("SIM_HTTP_PORT", "8000"))
@@ -76,7 +78,7 @@ class UdpProto(asyncio.DatagramProtocol):
     def connection_made(self, transport):
         # required: stored transport for later tosend()
         self.transport = transport
-        
+
     def datagram_received(self, data: bytes, addr):
         loop = asyncio.get_running_loop()
 
@@ -86,38 +88,51 @@ class UdpProto(asyncio.DatagramProtocol):
             if random.random() < MODEL.faults.drop_rate:
                 return
 
-        msg = data.decode("utf-8", errors="ignore").strip()
+        # decode request frame
+        try:
+            req = decode_frame(data)
+        except FrameError:
+            # if request is unframed/corrupt, ignore (device would drop)
+            return
 
-        # Gate UDP behavior by state to make it realistic
-        if msg == "PING":
-            resp = b"PONG"
-        elif msg == "STATUS":
-            resp = f"STATE={MODEL.state.value}".encode("utf-8")
-        elif msg == "START":
-            # Starting stream via UDP is only allowed when CONFIGURED
+        # determine response
+        if req.msg_type == mt.REQ_PING:
+            resp_type, payload = mt.RESP_OK, b"PONG"
+        elif req.msg_type == mt.REQ_STATUS:
+            resp_type, payload = mt.RESP_STATE, f"{MODEL.state.value}".encode()
+        elif req.msg_type == mt.REQ_START:
             if MODEL.state != DeviceState.CONFIGURED:
-                resp = b"ERR:BAD_STATE"
+                resp_type, payload = mt.RESP_ERR, b"BAD_STATE"
             else:
+                # prepare response FIRST
+                resp_type, payload = mt.RESP_OK, b"STREAMING"
+                # mutate state AFTER response is decided
                 MODEL.start_stream()
-                resp = b"OK:STREAMING"
-        elif msg == "STOP":
+        elif req.msg_type == mt.REQ_STOP:
             if MODEL.state != DeviceState.STREAMING:
-                resp = b"ERR:BAD_STATE"
+                resp_type, payload = mt.RESP_ERR, b"BAD_STATE"
             else:
+                resp_type, payload = mt.RESP_OK, b"STOPPED"
                 MODEL.stop_stream()
-                resp = b"OK:STOPPED"
         else:
-            resp = b"ERR:UNKNOWN"
+            resp_type, payload = mt.RESP_ERR, b"UNKNOWN_REQ"
 
-        # corrupt response
+        resp_pkt = encode_frame(resp_type, payload)
+
+        # corrupt response AFTER ENCODING (forces CRC mismatch)
         if MODEL.faults.corrupt_rate > 0:
             import random
-            if random.random() < MODEL.faults.corrupt_rate:
-                resp = resp[:-1] + b"X"
+            if random.random() < MODEL.faults.corrupt_rate and len(resp_pkt) > 10:
+                b = bytearray(resp_pkt)
+                b[8] ^= 0xFF
+                resp_pkt = bytes(b)
             
         # schedule send (with optional delay)
         delay = MODEL.faults.delay_ms / 1000.0
-        loop.call_later(delay, self.transport.sendto, resp, addr)
+        if delay > 0:
+            loop.call_later(delay, self.transport.sendto, resp_pkt, addr)
+        else:
+            self.transport.sendto(resp_pkt, addr)
 
 @app.on_event("startup")
 async def start_udp():
