@@ -128,7 +128,11 @@ def sim_udp(settings):
 @pytest.fixture(autouse=True)
 def reset_simulator(sim_api):
     """
-    Ensure each test starts from a clean state.
+    ensure each test starts from a clean state AND clean fault config
     """
+    # clear faults first 
+    sim_api.set_faults(delay_ms=0, drop_rate=0.0, corrupt_rate=0.0)
+
+    # reset state
     sim_api.reset()
     yield

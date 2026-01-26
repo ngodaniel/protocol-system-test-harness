@@ -73,13 +73,18 @@ def set_faults(f: FaultsIn):
     return {"status": "faults_updated", "faults": f.model_dump()}
 
 class UdpProto(asyncio.DatagramProtocol):
+    def connection_made(self, transport):
+        # required: stored transport for later tosend()
+        self.transport = transport
+        
     def datagram_received(self, data: bytes, addr):
-        # Apply delay first (simulates slow device)
-        MODEL.faults.apply_delay()
+        loop = asyncio.get_running_loop()
 
-        # Drop packet (simulates loss)
-        if MODEL.faults.should_drop():
-            return
+        # drop packet
+        if MODEL.faults.drop_rate > 0:
+            import random
+            if random.random() < MODEL.faults.drop_rate:
+                return
 
         msg = data.decode("utf-8", errors="ignore").strip()
 
@@ -104,11 +109,15 @@ class UdpProto(asyncio.DatagramProtocol):
         else:
             resp = b"ERR:UNKNOWN"
 
-        # Corrupt response (simulates bad CRC / corrupted payload)
-        if MODEL.faults.should_corrupt() and len(resp) > 0:
-            resp = resp[:-1] + (b"X" if resp[-1:] != b"X" else b"Y")
-
-        self.transport.sendto(resp, addr)
+        # corrupt response
+        if MODEL.faults.corrupt_rate > 0:
+            import random
+            if random.random() < MODEL.faults.corrupt_rate:
+                resp = resp[:-1] + b"X"
+            
+        # schedule send (with optional delay)
+        delay = MODEL.faults.delay_ms / 1000.0
+        loop.call_later(delay, self.transport.sendto, resp, addr)
 
 @app.on_event("startup")
 async def start_udp():

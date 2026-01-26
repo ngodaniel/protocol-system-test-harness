@@ -1,5 +1,5 @@
 from __future__ import annotations
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from .state import DeviceState
 from .faults import FaultConfig
 
@@ -7,7 +7,7 @@ from .faults import FaultConfig
 class SimModel:
     state: DeviceState = DeviceState.IDLE
     reset_count: int = 0
-    faults: FaultConfig = FaultConfig()
+    faults: FaultConfig = field(default_factory=FaultConfig)
 
     def reset(self) -> None:
         self.state = DeviceState.IDLE

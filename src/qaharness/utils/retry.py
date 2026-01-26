@@ -7,14 +7,14 @@ T = TypeVar("T")
 
 @dataclass(frozen=True)
 class RetryPolicy:
-    attemps: int = 3
+    attempts: int = 3
     base_delay_s: float = 0.05
     max_delay_s: float = 0.25
 
-def with_retires(fn: Callable[[], T], policy: RetryPolicy) -> T:
+def with_retries(fn: Callable[[], T], policy: RetryPolicy) -> T:
     last_exc: Exception | None = None
     delay = policy.base_delay_s
-    for _ in range(policy.attemps):
+    for _ in range(policy.attempts):
         try:
             return fn()
         except Exception as e:
