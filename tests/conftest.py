@@ -2,6 +2,7 @@ import os
 import subprocess
 import time
 import sys
+import socket
 from pathlib import Path
 
 import pytest
@@ -13,6 +14,25 @@ from qaharness.transport.udp import UdpClient, UdpEndpoint
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
+def _wait_for_udp_ready(host: str, port: int, timeout_s: float = 5.0) -> None:
+    deadline = time.time() + timeout_s
+    while time.time() < deadline:
+        try:
+            sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+            sock.settimeout(0.5)
+            sock.sendto(b"__", (host, port))
+            return
+        except Exception:
+            time.sleep(0.2)
+        finally:
+            sock.close()
+    raise RuntimeError(f"UDP did not become ready on {host}:{port}")
+
+def _free_port() -> int:
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        s.bind(("127.0.0.1", 0))
+        return s.getsockname()[1]
+    
 def _wait_for_http_ready(url: str, proc: subprocess.Popen, timeout_s: float = 15.0) -> None:
     """
     Wait for the simulator to respond at url. If the process exits, surface logs.
@@ -68,7 +88,7 @@ def simulator_process():
     # Keep a single source of truth for where tests expect the API
     # If you want to change ports later, change it here and in settings defaults.
     sim_host = "127.0.0.1"
-    sim_port = int(os.getenv("SIM_HTTP_PORT", "8000"))
+    sim_port = int(os.getenv("SIM_HTTP_PORT", _free_port()))
     sim_http = os.getenv("SIM_HTTP", f"http://{sim_host}:{sim_port}")
 
     env = os.environ.copy()
@@ -76,7 +96,7 @@ def simulator_process():
     env["SIM_HTTP_HOST"] = sim_host
     env["SIM_HTTP_PORT"] = str(sim_port)
     env["SIM_UDP_HOST"] = os.getenv("SIM_UDP_HOST", "127.0.0.1")
-    env["SIM_UDP_PORT"] = os.getenv("SIM_UDP_PORT", "9000")
+    env["SIM_UDP_PORT"] = os.getenv("SIM_UDP_PORT", str(_free_port()))
 
     # Start uvicorn as a module, from repo root
     cmd = [
@@ -99,8 +119,23 @@ def simulator_process():
     )
 
     try:
-        _wait_for_http_ready(f"{sim_http}/health", p, timeout_s=15.0)
+        _wait_for_http_ready(
+            f"{sim_http}/health", 
+            p, 
+            timeout_s=15.0
+        )
+        _wait_for_udp_ready(
+            env["SIM_UDP_HOST"],
+            int(env["SIM_UDP_PORT"]),
+            timeout_s=5.0,
+        )
         yield p
+    except Exception:
+        if p.stdout:
+            out = p.stdout.read()
+            if out:
+                print("\n--- simulator output (on failure) ---\n", out)
+        raise
     finally:
         # Graceful terminate, then force kill if needed
         p.terminate()
@@ -125,7 +160,7 @@ def sim_api(settings):
 def sim_udp(settings):
     return UdpClient(UdpEndpoint(settings.sim_udp_host, settings.sim_udp_port))
 
-@pytest.fixture(autouse=True)
+@pytest.fixture(scope="function", autouse=True)
 def reset_simulator(sim_api):
     """
     ensure each test starts from a clean state AND clean fault config
