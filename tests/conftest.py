@@ -91,13 +91,19 @@ def simulator_process():
     sim_port = int(os.getenv("SIM_HTTP_PORT", _free_port()))
     sim_http = os.getenv("SIM_HTTP", f"http://{sim_host}:{sim_port}")
 
-    env = os.environ.copy()
-    env["SIM_HTTP"] = sim_http
-    env["SIM_HTTP_HOST"] = sim_host
-    env["SIM_HTTP_PORT"] = str(sim_port)
-    env["SIM_UDP_HOST"] = os.getenv("SIM_UDP_HOST", "127.0.0.1")
-    env["SIM_UDP_PORT"] = os.getenv("SIM_UDP_PORT", str(_free_port()))
+    #env = os.environ.copy()
+    #env["SIM_HTTP"] = sim_http
+    #env["SIM_HTTP_HOST"] = sim_host
+    #env["SIM_HTTP_PORT"] = str(sim_port)
+    #env["SIM_UDP_HOST"] = os.getenv("SIM_UDP_HOST", "127.0.0.1")
+    #env["SIM_UDP_PORT"] = os.getenv("SIM_UDP_PORT", str(_free_port()))
 
+    os.environ["SIM_HTTP"] = sim_http
+    os.environ["SIM_HTTP_HOST"] = sim_host
+    os.environ["SIM_HTTP_PORT"] = str(sim_port)
+    os.environ["SIM_UDP_HOST"] = os.getenv("SIM_UDP_HOST", "127.0.0.1")
+    os.environ["SIM_UDP_PORT"] = os.getenv("SIM_UDP_PORT", str(_free_port()))
+    env = os.environ.copy()
     # Start uvicorn as a module, from repo root
     cmd = [
         sys.executable, "-m", "uvicorn",
@@ -171,3 +177,11 @@ def reset_simulator(sim_api):
     # reset state
     sim_api.reset()
     yield
+
+def _free_udp_port(host: str = "127.0.0.1") -> int:
+    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    s.bind((host, 0)) 
+    port = s.getsockname()[1]
+    s.close()
+    return port
+

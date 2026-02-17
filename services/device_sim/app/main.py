@@ -1,6 +1,10 @@
 import asyncio
 import os
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
+from fastapi.responses import HTMLResponse
+from fastapi.staticfiles import StaticFiles
+from fastapi.templating import Jinja2Templates
+from pathlib import Path
 from pydantic import BaseModel, Field
 
 from services.device_sim.app.core.protocol import SimModel
@@ -15,6 +19,15 @@ UDP_HOST = os.getenv("SIM_UDP_HOST", "127.0.0.1")
 UDP_PORT = int(os.getenv("SIM_UDP_PORT", "9000"))
 
 app = FastAPI(title="Device Simulator", version="0.2.0")
+BASE_DIR = Path(__file__).resolve().parent
+templates = Jinja2Templates(directory=str(BASE_DIR / "ui" / "templates"))
+
+app.mount("/ui/static", StaticFiles(directory=str(BASE_DIR / "ui" / "static")), name="ui-static")
+
+@app.get("/ui", response_class=HTMLResponse)
+def ui_home(request: Request):
+    return templates.TemplateResponse("index.html", {"request": request})
+
 MODEL = SimModel()
 
 class FaultsIn(BaseModel):
