@@ -55,7 +55,7 @@ jobs:
 
   main_system:
     name: Main - lint/type/system (${{ matrix.os }}, py${{ matrix.python-version }})
-    if: github.event_nname == 'push' && gethub.ref == 'refs/heads/main'
+    if: github.event_nname == 'push' && github.ref == 'refs/heads/main'
     runs-on: ${{ matrix.os }}
 
     strategy:
