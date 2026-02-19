@@ -15,17 +15,15 @@ jobs:
     name: PR - lint/type/smoke (ubuntu, py${{ matrix.python-version }})
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
-    strategy:
-      fail-fast: true
-      matrix:
-        python-version: ["3:11"]
 
     steps:
+      - name: Checkout
       - uses: actions/checkout@v4
 
+      - name: Setup Python
       - uses: actions/setup-python@v5
         with:
-          python-version: ${{ matrix.python-version }}
+          python-version: "3.11"
           cache: pip
 
       - name: Install Python deps
@@ -59,54 +57,75 @@ jobs:
     name: Main - lint/type/system (${{ matrix.os }}, py${{ matrix.python-version }})
     if: github.event_nname == 'push' && gethub.ref == 'refs/heads/main'
     runs-on: ${{ matrix.os }}
+
     strategy:
-    fail-fast: false
-    matrix:
-      os: ["ubuntu-latest", "windows-latest"]
-      python-version: ["3.10", "3.11"]
+      fail-fast: false
+      matrix:
+        os: ["ubuntu-latest", "windows-latest"]
+        python-version: ["3.10", "3.11"]
+
     steps:
+      - name: Checkout
       - uses: actions/checkout@v4
+
+      - name: Setup Python
       - uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
           cache: pip
+
       - name: Install Python deps
         run: |
           python -m pip install -U pip
           python -m pip install -e .
           python -m pip install ruff mypy pytest-html
+
       - name: Lint(ruff)
         run: python -m ruff check .
-      - name: Type check (mypy)
+
+      - name: Type check
+        run: python -m mypy src
+
+      - name: System tests (Linux)
+        if: runner.os == 'Linux'
         run: |
-          python -c "import os; os.makedirs('artifacts', exist_ok=True)"
-          python -m pytest -m system ^
-            --junitxml=artifacts/junit-system-${{ matrix.os }}-py${{matrix.python-version }}.xml
-            --html=artifacts/system-${{ matrix.os }}-py${{ matrix.python-version }}.html ^
+          mkdir -p artifacts
+          python -m pytests -m system \
+            --junitxml=artifacts/junit-system-${{ matrix.os }}-py${{matrix.python-version }}.xml \
+            --html=artifacts/system-${{ matrix.os }}-py${{ matrix.python-version }}.html \
             --self.contained-html
-        shell: branches
-        
+
+      - name: System tests (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path artifacts | Out-Null
+          python -m pytest -m system `
+            --junitxml=artifacts/junit-system-${{ matrix.os }}-py${{ matrix.python-version }}.xml `
+            --html=artifacts/system-${{ matrix.os }}-py${{ matrix.python-version }}.html `
+            --self-contained-html
+
       - name: Upload artifacts
         if: always()
         uses: actions/upload-artifacts@v4
         with:
           name: system-${{ matrix.os }}-py${{ matrix.python-version }}
           path: artifacts/
-  
+
   main-e2e:
     name: Main - Playwright E2E (ubuntu)
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     timeout-minutes: 20
-  
+
     steps:
       - uses: actions/checkout@v4
-  
+
       - uses: actions/setup-node@v4
         with:
           node-version: "20"
           cache: npm
-  
+
       - name: Install Node deps
         run: |
           if [ -f package-lock.json ]; then
@@ -114,13 +133,13 @@ jobs:
           else
             npm install
           fi
-  
+
       - name: Install Playwright browsers
         run: npx playwright install --with-deps
-  
+
       - name: Run Playwright tests
         run: npx playwright test
-  
+
       - name: Upload Playwright report
         if: always()
         uses: actions/upload-artifacts@v4
@@ -129,32 +148,32 @@ jobs:
           path: |
             playwright-report/
             test-results/
-  
+
   nightly:
     name: Nightly - full regression (ubuntu, py3.11)
     if: github.event_name == 'schedule'
     runs-on: ubuntu-latest
     timeout-minutes: 30
-  
+
     steps:
       - uses: actions/checkout@v4
-  
+
       - uses: actions/setup-python@v5
         with:
         python-version: "3.11"
         cache: pip
-  
+
       - name: Install Python deps
         run: |
           python -m pip install -U pip
           python -m pip install -e .
           python -m pip install ruff mypy pytest-html
-  
+
       - name: Lint + type
         run: |
           python -m ruff check .
           python -m mypy src
-  
+
       - name: Full test suite
         run: |
           mkdri -p artifacts
@@ -162,7 +181,7 @@ jobs:
             --junitxml=artifacts/junit-all.xml \
             --html=artifacts/all.html \
             --self-contained-html
-  
+
       - name: Upload artifacts
         if: always()
         uses: actions/upload-artifact@v4
