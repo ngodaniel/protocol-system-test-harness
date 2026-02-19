@@ -18,6 +18,9 @@ HTTP_PORT = int(os.getenv("SIM_HTTP_PORT", "8000"))
 UDP_HOST = os.getenv("SIM_UDP_HOST", "127.0.0.1")
 UDP_PORT = int(os.getenv("SIM_UDP_PORT", "9000"))
 
+TCP_HOST = os.getenv("SIM_TCP_HOST", "127.0.0.1")
+TCP_PORT = int(os.getenv("SIM_TCP_PORT", "9100"))
+
 app = FastAPI(title="Device Simulator", version="0.2.0")
 BASE_DIR = Path(__file__).resolve().parent
 templates = Jinja2Templates(directory=str(BASE_DIR / "ui" / "templates"))
@@ -146,6 +149,106 @@ class UdpProto(asyncio.DatagramProtocol):
             loop.call_later(delay, self.transport.sendto, resp_pkt, addr)
         else:
             self.transport.sendto(resp_pkt, addr)
+
+import struct
+_HDR_FMT = "!2sBBH"
+_HDR_SIZE = struct.calcsize(_HDR_FMT)
+_CRC_SIZE = 4 # framing.py uses '!I' -> 4 bytes
+
+async def _handle_tcp_client(reader: asyncio.StreamReader, writer: asyncio.StreamWriter):
+    try:
+        # read fixed header
+        hdr = await reader.readexactly(_HDR_SIZE)
+
+        # parse to know how much more to read
+        magic, ver, msg_type, length = struct.unpack(_HDR_FMT, hdr)
+
+        # read payload + CRC (TCP has no datagram boundaries)
+        rest = await reader.readexactly(length + _CRC_SIZE)
+        packet = hdr + rest
+
+        # drop fault: simualte "no response" by closing immediately
+        if MODEL.faults.drop_rate > 0:
+            import random
+            if random.random() < MODEL.faults.drop_rate:
+                writer.close()
+                await writer.wait_closed()
+                return
+            
+        # Decode (validates CRC)
+        try:
+            req = decode_frame(packet)
+        except FrameError:
+            writer.close()
+            await writer.wait_closed()
+            return
+        # determine response (same logic as UDP)
+        if req.msg_type == mt.REQ_PING:
+            resp_type, payload = mt.RESP_OK, b"PONG"
+        elif req.msg_type == mt.REQ_STATUS:
+            resp_type, payload = mt.RESP_STATE, f"{MODEL.state.value}".encode()
+        elif req.msg_type == mt.REQ_START:
+            if MODEL.state != DeviceState.CONFIGURED:
+                resp_type, payload = mt.RESP_ERR, b"BAD_STATE"
+            else:
+                resp_type, payload = mt.RESP_OK, b"STREAMING"
+                MODEL.start_stream()
+        elif req.msg_type == mt.REQ_STOP:
+            if MODEL.state != DeviceState.STREAMING:
+                resp_type, payload = mt.RESP_ERR, b"BAD_STATE"
+            else:
+                resp_type, payload = mt.RESP_OK, b"STOPPED"
+                MODEL.stop_stream()
+        else:
+            resp_type, payload = mt.RESP_ERR, b"UKNOWN_REQ"
+        resp_pkt = encode_frame(resp_type, payload)
+
+        # corrupt respojnse after encoding (forces CRC mismatch)
+        if MODEL.faults.corrupt_rate > 0:
+            import random
+            if random.random() < MODEL.faults.corrupt_rate and len(resp_pkt) > 10:
+                b = bytearray(resp_pkt)
+                b[8] ^= 0xFF
+                resp_pkt = bytes(b)
+
+        # delay without blocking event loop
+        delay = MODEL.faults.delay_ms / 1000.0
+        if delay > 0:
+            await asyncio.sleep(delay)
+
+        writer.write(resp_pkt)
+        await writer.drain()
+
+    except asyncio.IncompleteReadError:
+        # client disocnnected early
+        pass
+    finally:
+        writer.close()
+        try:
+            await writer.wait_closed()
+        except Exception:
+            pass
+
+@app.on_event("startup")
+async def start_tcp():
+    server = await asyncio.start_server(_handle_tcp_client, host=TCP_HOST, port=TCP_PORT)
+    app.state.tcp_server = server
+
+@app.on_event("shutdown")
+async def stop_tcp():
+    s = getattr(app.state, "tcp_server", None)
+    if s:
+        s.close()
+        await s.wait_closed()
+
+        
+@app.get("/control/faults")
+def get_faults():
+    return{
+        "delay_ms": MODEL.faults.delay_ms,
+        "drop_rate": MODEL.faults.drop_rate,
+        "corrupt_rate": MODEL.faults.corrupt_rate,
+    }
 
 @app.on_event("startup")
 async def start_udp():

@@ -11,6 +11,7 @@ import httpx
 from qaharness.config.settings import get_settings
 from qaharness.api.client import SimApiClient
 from qaharness.transport.udp import UdpClient, UdpEndpoint
+from qaharness.transport.tcp import TcpClient, TcpEndpoint
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
@@ -103,6 +104,10 @@ def simulator_process():
     os.environ["SIM_HTTP_PORT"] = str(sim_port)
     os.environ["SIM_UDP_HOST"] = os.getenv("SIM_UDP_HOST", "127.0.0.1")
     os.environ["SIM_UDP_PORT"] = os.getenv("SIM_UDP_PORT", str(_free_port()))
+    os.environ["SIM_TCP_HOST" ] = os.getenv("SIM_TCP_HOST", "127.0.0.1")
+    os.environ["SIM_TCP_PORT"] = os.getenv("SIM_TCP_PORT", str(_free_port()))
+
+
     env = os.environ.copy()
     # Start uvicorn as a module, from repo root
     cmd = [
@@ -133,6 +138,11 @@ def simulator_process():
         _wait_for_udp_ready(
             env["SIM_UDP_HOST"],
             int(env["SIM_UDP_PORT"]),
+            timeout_s=5.0,
+        )
+        _wait_for_tcp_ready(
+            env["SIM_TCP_HOST"],
+            int(env["SIM_TCP_PORT"]),
             timeout_s=5.0,
         )
         yield p
@@ -178,10 +188,24 @@ def reset_simulator(sim_api):
     sim_api.reset()
     yield
 
+@ pytest.fixture
+def sim_tcp(settings):
+    return TcpClient(TcpEndpoint(settings.sim_tcp_host, settings.sim_tcp_port))
+
 def _free_udp_port(host: str = "127.0.0.1") -> int:
     s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     s.bind((host, 0)) 
     port = s.getsockname()[1]
     s.close()
     return port
+
+def _wait_for_tcp_ready(host: str, port: int, timeout_s: float = 5.0) -> None:
+    deadline = time.time() + timeout_s
+    while time.time() < deadline:
+        try:
+            with socket.create_connection((host, port), timeout=0.5):
+                return
+        except Exception:
+            time.sleep(0.2)
+    raise RuntimeError(f"TCP did not become ready on {host}:{port}")
 

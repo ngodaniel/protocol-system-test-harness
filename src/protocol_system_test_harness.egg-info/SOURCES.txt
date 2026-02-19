@@ -16,6 +16,6 @@ src/qaharness/config/settings.py
 src/qaharness/transport/__init__.py
 src/qaharness/transport/framing.py
 src/qaharness/transport/msgtypes.py
+src/qaharness/transport/tcp.py
 src/qaharness/transport/udp.py
 src/qaharness/utils/retry.py
-tests/test_example_cross_protocol.py
