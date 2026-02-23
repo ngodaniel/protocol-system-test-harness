@@ -1,5 +1,4 @@
 import pytest
-from qaharness.utils.retry import RetryPolicy
 from qaharness.transport import msgtypes as mt
 from qaharness.transport.framing import FrameError
 

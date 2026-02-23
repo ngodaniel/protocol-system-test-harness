@@ -1,5 +1,4 @@
 import os
-import socket
 
 from qaharness.transport import msgtypes as mt
 UDP_HOST = os.getenv("SIM_UDP_HOST", "127.0.0.1")

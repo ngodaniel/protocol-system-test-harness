@@ -1,5 +1,3 @@
-import pytest
-
 from qaharness.transport import msgtypes as mt
 
 def test_udp_start_requires_configured(sim_api, sim_udp):

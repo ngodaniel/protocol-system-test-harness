@@ -1,5 +1,6 @@
 import asyncio
 import os
+import struct
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
@@ -150,7 +151,7 @@ class UdpProto(asyncio.DatagramProtocol):
         else:
             self.transport.sendto(resp_pkt, addr)
 
-import struct
+
 _HDR_FMT = "!2sBBH"
 _HDR_SIZE = struct.calcsize(_HDR_FMT)
 _CRC_SIZE = 4 # framing.py uses '!I' -> 4 bytes

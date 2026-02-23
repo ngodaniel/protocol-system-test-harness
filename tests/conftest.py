@@ -84,7 +84,6 @@ def simulator_process():
     Starts the simulator automatically for the test session (Windows-friendly).
     Uses `py -m uvicorn ...` from repo root so `services.*` imports resolve.
     """
-    settings = get_settings()
 
     # Keep a single source of truth for where tests expect the API
     # If you want to change ports later, change it here and in settings defaults.
