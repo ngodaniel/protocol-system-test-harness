@@ -1,0 +1,4 @@
+# file: C:\Users\Daniel Ngo\protocol-system-test-harness\src\qaharness\config\settings.py
+# hypothesis_version: 6.151.9
+
+['127.0.0.1', '9000', '9100', 'SIM_HTTP', 'SIM_TCP_HOST', 'SIM_TCP_PORT', 'SIM_UDP_HOST', 'SIM_UDP_PORT']

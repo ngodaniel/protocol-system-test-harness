@@ -41,10 +41,14 @@ def decode_frame(packet: bytes) -> Frame:
     magic, ver, msg_type, length = struct.unpack(_HDR_FMT, header)
 
     if magic != MAGIC:
-        raise FrameError("bag magic")
+        raise FrameError("bad magic")
     if ver != VERSION:
         raise FrameError("unsupported version")
     
+    expected_len = _HDR_SIZE + length + _CRC_SIZE
+    if len(packet) != expected_len:
+        raise FrameError("invalid packet length")
+        
     payload = packet[_HDR_SIZE:_HDR_SIZE + length]
     crc_recv = struct.unpack(_CRC_FMT, packet[-_CRC_SIZE:])[0]
 

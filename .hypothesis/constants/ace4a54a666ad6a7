@@ -1,0 +1,4 @@
+# file: C:\Users\Daniel Ngo\protocol-system-test-harness\src\qaharness\transport\framing.py
+# hypothesis_version: 6.151.9
+
+[b'QA', 255, 65535, 4294967295, '!2sBBH', '!I', 'bad magic', 'crc mismatch', 'packet too short', 'payload too large', 'unsupported version']

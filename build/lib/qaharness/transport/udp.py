@@ -2,7 +2,7 @@ from __future__ import annotations
 import socket
 from dataclasses import dataclass
 from qaharness.utils.retry import RetryPolicy, with_retries
-from qaharness.transport.framing import encode_frame, decode_frame, FrameError
+from qaharness.transport.framing import encode_frame, decode_frame
 from qaharness.transport import msgtypes as mt
 
 @dataclass(frozen=True)

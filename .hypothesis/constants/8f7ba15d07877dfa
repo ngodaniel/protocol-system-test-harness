@@ -1,0 +1,4 @@
+# file: C:\Users\Daniel Ngo\protocol-system-test-harness\src\qaharness\api\client.py
+# hypothesis_version: 6.151.9
+
+[0.0, 2.0, '/control/configure', '/control/faults', '/control/reset', '/control/stream/stop', '/health', '/status', 'corrupt_rate', 'delay_ms', 'drop_rate']
