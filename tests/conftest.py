@@ -21,6 +21,11 @@ from qaharness.reporting import SqlStore
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
+_QA_SQL_STORE = None
+_QA_RUN_ID = None
+_QA_SEEN_CALL_REPORTS = set()
+_QA_METRICS_SUMMARY = None
+
 def _utc_now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
 
@@ -71,6 +76,8 @@ def _flatten_metrics_record(record: dict) -> list[tuple[str, float | int | None,
     return rows
 
 def pytest_sessionstart(sessions):
+    global _QA_SQL_STORE, _QA_RUN_ID, _QA_SEEN_CALL_REPORTS, _QA_METRICS_SUMMARY
+
     store = SqlStore()
     run_id = str(uuid.uuid4())
 
@@ -88,9 +95,9 @@ def pytest_sessionstart(sessions):
         python_version=sys.version.split()[0],
     )
 
-    session.config._qa_sql_store = store
-    session.config._qa_run_id = run_id
-    session.config._qa_seen_call_reports = set()
+    _QA_SQL_STORE = store
+    _QA_RUN_ID = run_id
+    _QA_SEEN_CALL_REPORTS = set()
 
     # optional summary json (nice alongside DB)
     Path("artifacts").mkdir(exist_ok=True)
@@ -106,14 +113,17 @@ def pytest_runtest_logreport(report):
     """
     Record one result row per test call phase
     """
+    global _QA_SQL_STORE, _QA_RUN_ID, _QA_SEEN_CALL_REPORTS, _QA_METRICS_SUMMARY
+
     if report.when != "call":
         return
 
-    config = report.config
-    store = getattr(config, "_qa_sql_store", None)
-    run_id = getattr(config, "_qa_run_id", None)
-    seen = getattr(config, "_qa_seen_call_reports", None)
-    if store is None or run_id is None or seen is None:
+    store = _QA_SQL_STORE
+    run_id = _QA_RUN_ID
+    seen = _QA_SEEN_CALL_REPORTS
+    summary = _QA_METRICS_SUMMARY
+
+    if store is None or run_id is None or seen is None or summary is None:
         return
 
     # guard against duplicate processing
@@ -149,29 +159,33 @@ def pytest_runtest_logreport(report):
     )
 
     # also append to JSON summary
-    config._qa_metrics_summary["tests"].append(
+    summary["tests"].append(
         {
-            "nodid": report.nodeid,
+            "nodeid": report.nodeid,
             "outcome": outcome,
             "duration_s": getattr(report, "duration", None),
         }
     )
 
 def pytest_sessionfinish(session, exitstatus):
-    store = getattr(session.config, "_qa_sql_store", None)
-    run_id = getattr(session.config, "_qa_run_id", None)
+    global _QA_SQL_STORE, _QA_RUN_ID, _QA_METRICS_SUMMARY
+    
+    store = _QA_SQL_STORE
+    run_id = _QA_RUN_ID
+    summary = _QA_METRICS_SUMMARY
+
     if store is not None and run_id is not None:
         try:
             store.finish_run(run_id=run_id, finished_at=utc_now-iso(), exit_status=int(exitstatus))
         finally:
-            summary = session.config._qa_metrics_summmary
-            summary["finished_at"] = utc_now_iso()
-            summary["exitstatus"] = int(exitstatus)
-            Path("artifacts").mkdir(exist_ok=True)
-            (Path("artifacts") / "metrics_summary.json").write_text(
-                json.dump(summary, indent=2),
-                encoding="utf-8",
-            )
+            if summary is not None:
+                summary["finished_at"] = _utc_now_iso()
+                summary["existatus"] = int(exitstatus)
+                Path("artifacts").mkdir(exist_ok=True)
+                (Path("artifacts") / "metrics_summary.json").write_text(
+                    json.dumps(summary, indent=2),
+                    encoding="utf-8",
+                )
             store.close()
 
 def _wait_for_udp_ready(host: str, port: int, timeout_s: float = 5.0) -> None:
@@ -403,17 +417,16 @@ def metrics_recorder(request):
     -   writes falttened numeric metrics into SQLite perf_metrics
 
     """
+    global _QA_SQL_STORE, _QA_RUN_ID
+
     start = time.time()
     records = []
 
-    config = request.config
-    store = getattr(config, "_qa_sql_store", None)
-    run_id = getattr(config, "_qa_run_id", None)
-
-
     def record(payload: dict):
         records.append(payload)
-
+        
+        store = _QA_SQL_STORE
+        run_id = _QA_RUN_ID
         if store is not None and run_id is not None:
             for metric_name, metric_value, unit, tags in _flatten_metrics_record(payload):
                 store.record_metric(
