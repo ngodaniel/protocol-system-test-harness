@@ -112,15 +112,6 @@ jobs:
           name: system-${{ matrix.os }}-py${{ matrix.python-version }}
           path: artifacts/
 
-      - name: Upload test metrics artifacts
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: perf_metrics-${{ matrix.python-version }}
-          path: |
-            artifacts/metrics/
-            artifacts/metrics_summary.json
-
   main-e2e:
     name: Main - Playwright E2E (ubuntu)
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
@@ -173,7 +164,7 @@ jobs:
 
   perf-envelope:
     name: Perf Envelope (ubuntu, py3.11)
-    if: github.even_name == 'push' && github.ref == 'refs/heads/main' || github.event_name == 'schedule'
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main' || github.event_name == 'schedule'
     runs-on: ubuntu-latest
     timeout-minutes: 20
 
@@ -199,12 +190,12 @@ jobs:
           PERF_COMBINED_DROP_RATE: "0.20"
           PERF_COMBINED_DELAY_MS: "80"
           PERF_COMBINED_MIN_SUCCESS_RATE: "0.80"
-          PERF_COMBINED_p50_MIN_MS: "70"
+          PERF_COMBINED_P50_MIN_MS: "70"
           PERF_COMBINED_P95_MAX_MS: "900"
 
           # drop-only test tunables
           PERF_DROP_SAMPLES: "30"
-          PERF_DORP_RATE: "0.35"
+          PERF_DROP_RATE: "0.35"
           PERF_DROP_MIN_SUCCESS_RATE: "0.85"
           PERF_DROP_P95_MAX_MS: "600"
 
