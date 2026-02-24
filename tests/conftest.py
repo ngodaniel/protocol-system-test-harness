@@ -85,7 +85,7 @@ def pytest_sessionstart(sessions):
         branch=branch,
         ci_job=ci_job,
         os_name=platform.platform(),
-        python_version+sys.version.split()[0],
+        python_version=sys.version.split()[0],
     )
 
     session.config._qa_sql_store = store
