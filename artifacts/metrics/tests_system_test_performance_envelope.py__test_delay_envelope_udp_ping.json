@@ -1,0 +1,23 @@
+{
+  "test_id": "tests/system/test_performance_envelope.py::test_delay_envelope_udp_ping",
+  "timestamp_epoch": 1771892808.939098,
+  "duration_s": 1.515486717224121,
+  "records": [
+    {
+      "name": "delay_envelope_udp_ping",
+      "faults": {
+        "drop_rate": 0.0,
+        "delay_ms": 120,
+        "corrupt_rate": 0.0
+      },
+      "samples": 12,
+      "latency_ms": {
+        "min": 125.09450002107769,
+        "max": 127.17690004501492,
+        "mean": 125.99745834207472,
+        "p50": 125.98174999584444,
+        "p95": 126.97917501209304
+      }
+    }
+  ]
+}

@@ -1,0 +1,46 @@
+{
+  "test_id": "tests/system/test_performance_envelope.py::test_combined_drop_and_delay_envelope",
+  "timestamp_epoch": 1771895667.2668307,
+  "duration_s": 10.026371240615845,
+  "records": [
+    {
+      "name": "combined_drop_and_delay_envelope",
+      "faults": {
+        "drop_rate": 0.2,
+        "delay_ms": 80,
+        "corrupt_rate": 0.0
+      },
+      "samples": 60,
+      "results": {
+        "successes": 60,
+        "timeouts": 0,
+        "success_rate": 1.0
+      },
+      "latency_ms": {
+        "count": 60,
+        "mean": 167.04477666547368,
+        "p50": 94.70934999990277,
+        "p95": 550.0125449820189,
+        "min": 82.92590000201017,
+        "max": 864.0084000071511
+      },
+      "retry": {
+        "policy": {
+          "attempts": 4,
+          "initial_backoff_s": 0.02,
+          "max_backoff_s": 0.1,
+          "multiplier": 2.0,
+          "jitter_ratio": 0.1
+        },
+        "total_retry_events": 19,
+        "retries_per_request_mean": 0.31666666666666665,
+        "retries_per_request_p95": 2.0
+      },
+      "thresholds": {
+        "min_success_rate": 0.8,
+        "p50_min_ms": 70.0,
+        "p95_max_ms": 900.0
+      }
+    }
+  ]
+}

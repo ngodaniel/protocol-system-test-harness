@@ -25,3 +25,7 @@ where = ["src"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-q"
+markers = [
+  "system: system/integration tests that exercise simulator + protocol behavior",
+  "smoke: fast smoke tests",
+]

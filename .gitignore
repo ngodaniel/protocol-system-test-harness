@@ -7,3 +7,7 @@ tests/system/__pycache__/test_fault_injection_corruption.cpython-314-pytest-9.0.
 tests/unit/__pycache__/test_framing_fuzzy.cpython-314-pytest-9.0.2.pyc
 services/device_sim/app/__pycache__/main.cpython-314.pyc
 services/device_sim/app/core/__pycache__/faults.cpython-314.pyc
+tests/__pycache__/conftest.cpython-314-pytest-9.0.2.pyc
+tests/smoke/__pycache__/test_tcp.cpython-314-pytest-9.0.2.pyc
+tests/system/__pycache__/test_performance_envelope.cpython-314-pytest-9.0.2.pyc
+tests/smoke/__pycache__/test_basic_handshake.cpython-314-pytest-9.0.2.pyc

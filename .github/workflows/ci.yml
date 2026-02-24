@@ -112,6 +112,15 @@ jobs:
           name: system-${{ matrix.os }}-py${{ matrix.python-version }}
           path: artifacts/
 
+      - name: Upload test metrics artifacts
+        if: always()
+        uses: actions/upload-artifacts@v4
+        with:
+          name: perf_metrics-${{ matrix.python-version }}
+          path: |
+            artifacts/metrics/
+            artifacts/metrics_summary.json
+
   main-e2e:
     name: Main - Playwright E2E (ubuntu)
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'

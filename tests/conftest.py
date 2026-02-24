@@ -3,6 +3,7 @@ import subprocess
 import time
 import sys
 import socket
+import json
 from pathlib import Path
 
 import pytest
@@ -175,6 +176,10 @@ def sim_api(settings):
 def sim_udp(settings):
     return UdpClient(UdpEndpoint(settings.sim_udp_host, settings.sim_udp_port))
 
+@pytest.fixture
+def sim_udp_perf(settings):
+    return UdpClient(UdpEndpoint(settings.sim_udp_host, settings.sim_udp_port), timeout_s=0.2)
+
 @pytest.fixture(scope="function", autouse=True)
 def reset_simulator(sim_api):
     """
@@ -208,3 +213,64 @@ def _wait_for_tcp_ready(host: str, port: int, timeout_s: float = 5.0) -> None:
             time.sleep(0.2)
     raise RuntimeError(f"TCP did not become ready on {host}:{port}")
 
+
+def _artifact_dir() -> Path:
+    p = Path("artifacts") / "metrics"
+    p.mkdir(parents=True, exist_ok=True)
+    return p
+
+@pytest.fixture
+def metrics_recorder(request):
+    """
+    Usage:
+        metric_recorder({
+            "name": "delay_envelope_udp_ping",
+            "p50_ms", 123.4,
+            ...
+        })
+    writes one JSON file per test
+    """
+    start = time.time()
+    records = []
+    def record(payload: dict):
+        records.append(payload)
+
+    yield record
+
+    # write on teardown (even if test failed, if fixture teardown runs)
+    test_id = request.node.nodeid.replace("/", "_").replace("::", "__")
+    out = {
+        "test_id": request.node.nodeid,
+        "timestamp_epoch": start,
+        "duration_s": time.time() - start,
+        "records": records,
+    }
+
+    out_path = _artifact_dir() / f"{test_id}.json"
+    out_path.write_text(json.dumps(out, indent=2), encoding="utf-8")
+
+def pytest_sessionstart(session):
+    d = Path("artifacts")
+    d.mkdir(exist_ok=True)
+    session.config._qa_metrics_summary = {
+        "started_at": time.time(),
+        "tests": [],
+    }
+
+@pytest.hookimpl(hookwrapper=True)
+def pytest_runtest_call(item):
+    t0 = time.time()
+    outcome = yield
+    dt = time.time() - t0
+    item.config._qa_metrics_summary["tests"].append({
+        "nodeid": item.nodeid,
+        "duration_s": dt,
+        "status": "passed" if outcome.excinfo is None else "failed",
+    })
+
+def pytest_sessionfinish(session, exitstatus):
+    summary = session.config._qa_metrics_summary
+    summary["finished_at"] = time.time()
+    summary["existatus"] = exitstatus
+    out = Path("artifacts") / "metrics_summary.json"
+    out.write_text(json.dumps(summary, indent=2), encoding='utf-8')
