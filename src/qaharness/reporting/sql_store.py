@@ -130,7 +130,7 @@ class SqlStore:
         run_id: str,
         nodeid: str,
         outcome: str, 
-        duration_s: float | None:
+        duration_s: float | None,
         error_type: str | None = None,
         error_message: str | None = None,
     ) -> None:
