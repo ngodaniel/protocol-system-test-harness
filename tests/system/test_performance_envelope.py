@@ -1,10 +1,8 @@
-import statistics
-import time
 import os
-import time
 import pytest
+import time
 from qaharness.transport import msgtypes as mt
-from qaharness.utils.retry import RetryPolicy
+from qaharness.utils.retry import RetryPolicy, with_retries
 
 """
 the repo explicitly models:
@@ -77,12 +75,6 @@ def test_drop_envelope_with_retries_udp_ping(sim_api, sim_udp_perf, metrics_reco
       - records latency + retry behavior
       - uses env-tunable thresholds for CI stability
     """
-    import os
-    import time
-
-    from qaharness.transport import msgtypes as mt
-    from qaharness.utils.retry import RetryPolicy, with_retries
-
     # --- Tunables ---
     attempts = int(os.getenv("PERF_DROP_SAMPLES", "50"))
     drop_rate = float(os.getenv("PERF_DROP_RATE", "0.35"))
