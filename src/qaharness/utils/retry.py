@@ -72,7 +72,7 @@ def with_retries(
     fn: Callable[[], T],
     policy: RetryPolicy,
     *,
-    on_retry: Callabel[[int, BaseException, float], Any] | None = None,
+    on_retry: Callable[[int, BaseException, float], Any] | None = None,
 ) -> T:
     """
     execute fn() with retries according to 'policy'

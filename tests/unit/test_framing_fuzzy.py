@@ -1,5 +1,4 @@
 import struct
-import zlib
 
 import pytest
 from hypothesis import given, strategies as st, settings, HealthCheck
