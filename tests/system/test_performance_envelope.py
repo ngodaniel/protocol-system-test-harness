@@ -105,7 +105,7 @@ def test_drop_envelope_with_retries_udp_ping(sim_api, sim_udp_perf, metrics_reco
     latencies_ms = []
     retry_event_counts = []
     total_retry_events = 0
-
+    retry_events = []
     for _ in range(attempts):
         retry_events_for_request = 0
 
@@ -113,6 +113,12 @@ def test_drop_envelope_with_retries_udp_ping(sim_api, sim_udp_perf, metrics_reco
             nonlocal retry_events_for_request, total_retry_events
             retry_events_for_request += 1
             total_retry_events += 1
+            retry_events.append({
+                "request_name": "REQ_PING",     # or "REQ_STATUS"
+                "attempt": attempt_num,
+                "sleep_s": sleep_s,
+                "error": type(exc).__name__,
+            })
 
         t0 = time.perf_counter()
         try:
@@ -132,7 +138,7 @@ def test_drop_envelope_with_retries_udp_ping(sim_api, sim_udp_perf, metrics_reco
         except TimeoutError:
             timeouts += 1
             retry_event_counts.append(retry_events_for_request)
-
+        
     success_rate = successes / attempts
 
     # Latency stats (successful requests only)
@@ -178,6 +184,7 @@ def test_drop_envelope_with_retries_udp_ping(sim_api, sim_udp_perf, metrics_reco
             "total_retry_events": total_retry_events,
             "retries_per_request_mean": retries_per_request_mean,
             "retries_per_request_p95": retries_per_request_p95,
+            "events": retry_events,
         },
         "thresholds": {
             "min_success_rate": min_success_rate,
@@ -243,6 +250,7 @@ def test_combined_drop_and_delay_envelope(sim_api, sim_udp_perf, metrics_recorde
     latencies_ms = []
     retry_event_counts = []
     total_retry_events = 0
+    retry_events = []
 
     for _ in range(attempts):
         retry_events_for_request = 0
@@ -251,7 +259,12 @@ def test_combined_drop_and_delay_envelope(sim_api, sim_udp_perf, metrics_recorde
             nonlocal retry_events_for_request, total_retry_events
             retry_events_for_request += 1
             total_retry_events += 1
-
+            retry_events.append({
+                "request_name": "REQ_PING",   # or "REQ_STATUS"
+                "attempt": attempt_num,
+                "sleep_s": sleep_s,
+                "error": type(exc).__name__,
+            })
         t0 = time.perf_counter()
         try:
             # Call request_once under retry wrapper to capture retry events
@@ -322,6 +335,7 @@ def test_combined_drop_and_delay_envelope(sim_api, sim_udp_perf, metrics_recorde
             "total_retry_events": total_retry_events,
             "retries_per_request_mean": retries_per_request_mean,
             "retries_per_request_p95": retries_per_request_p95,
+            "events": retry_events,
         },
         "thresholds": {
             "min_success_rate": min_success_rate,
