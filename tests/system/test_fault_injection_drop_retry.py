@@ -1,6 +1,8 @@
+import pytest
 from qaharness.utils.retry import RetryPolicy
 from qaharness.transport import msgtypes as mt
 
+@pytest.mark.system
 def test_udp_drop_rate_with_retries(sim_api, sim_udp):
     # configure to keep state-related errors out of the way
     sim_api.configure()
@@ -13,6 +15,6 @@ def test_udp_drop_rate_with_retries(sim_api, sim_udp):
     assert rtype == mt.RESP_STATE
     assert payload in (b"CONFIGURED", b"STREAMING", b"IDLE")
 
-    
+
 
 
