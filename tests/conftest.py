@@ -4,7 +4,11 @@ import time
 import sys
 import socket
 import json
+import platform
+import uuid
+
 from pathlib import Path
+from datetime import datetime, timezone
 
 import pytest
 import httpx
@@ -13,8 +17,162 @@ from qaharness.config.settings import get_settings
 from qaharness.api.client import SimApiClient
 from qaharness.transport.udp import UdpClient, UdpEndpoint
 from qaharness.transport.tcp import TcpClient, TcpEndpoint
+from qaharness.reporting import SqlStore
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
+
+def _utc_now_iso() -> str:
+    return datetime.now(timezone.utc).isoformat()
+
+def _metrics_artifact_dir() -> Path:
+    p = Path("artifacts") / "metrics"
+    p.mkdir(parents=True, exist_ok=True)
+    return p
+
+def _flatten_metrics_record(record: dict) -> list[tuple[str, float | int | None, str | None, dict]]:
+    """
+    convert structured metrics payloads into rows for perf_metrics
+    keeps top-lvel context in tags and emits common numeric fields as rows
+    """
+    rows: list[tuple[str, float | int | None, str | None, dict]] = []
+
+    base_tags = {
+        "name": record.get("name"),
+        "faults": record.get("faults"),
+        "thresholds": record.get("thresholds"),
+        "retry_policy": (record.get("retry") or {}).get("policy")
+    }
+
+    # generic top-level numeric values
+    for k, v in record.items():
+        if isisntance(v, (int, float)) and not isinstance(v, bool):
+            rows.append((k, v, None, base_tags))
+
+    # result block
+    for k, v in (record.get("results") or {}).items():
+        if isinstance(v, (int, float)) and not isinstance(v, bool):
+            unit = "ratio" if "rate" in k else None
+            rows.append((f"results.{k}", v, unit, base_tags))
+
+    # latency block
+    for k, v in (record.get("latency_ms") or {}).items():
+        if isinstance(v, (int, float)) and not isinstance(v, bool):
+            unit = "ms" if kk not in ("count",) else None
+            rows.append((f"latency.{k}", v, unit, base_tags))
+
+    # retry block (aggregate stats)
+    retry = record.get("retry") or {}
+    for k, v in retry.items():
+        if k == "policy":
+            continue
+        if isinstance(v, (int, float)) and not isinstance(v, bool):
+            unit = "s" if "sleep" in k else None
+            rows.append((f"retry.{k}", v, unit, base_tags))
+    return rows
+
+def pytest_sessionstart(sessions):
+    store = SqlStore()
+    run_id = str(uuid.uuid4())
+
+    git_sha = os.getenv("GITHUB_SHA") or os.getenv("CI_COMMIT_SHA")
+    branch = os.getenv("GITHUB_REF_NAME") or os.getenv("CI_COMMIT_BRANCH")
+    ci_job = os.getenv("GITHUB_JOB") or os.getenv("CI_JOB_NAME")
+
+    store.start_run(
+        run_id=run_id,
+        started_at=_utc_now_iso(),
+        git_sha=git_sha,
+        branch=branch,
+        ci_job=ci_job,
+        os_name=platform.platform(),
+        python_version+sys.version.split()[0],
+    )
+
+    session.config._qa_sql_store = store
+    session.config._qa_run_id = run_id
+    session.config._qa_seen_call_reports = set()
+
+    # optional summary json (nice alongside DB)
+    Path("artifacts").mkdir(exist_ok=True)
+    session.config._qa_metrics_summary = {
+        "run_id": run_id,
+        "started_at": _utc_now_is(),
+        "tests": [],
+        "db_path": str(store.db_path),
+    }
+
+@pytest.hookimpl(tryfirst=True)
+def pytest_runtest_logreport(report):
+    """
+    Record one result row per test call phase
+    """
+    if report.when != "call":
+        return
+
+    config = report.config
+    store = getattr(config, "_qa_sql_store", None)
+    run_id = getattr(config, "_qa_run_id", None)
+    seen = getattr(config, "_qa_seen_call_reports", None)
+    if store is None or run_id is None or seen is None:
+        return
+
+    # guard against duplicate processing
+    key = (report.nodeid, report.when)
+    if key in seen:
+        return
+    seen.add(key)
+
+    outcome = "passed"
+    if report.failed:
+        outcome = "failed"
+    elif report.skipped:
+        outcome = "skipped"
+
+    error_type = None
+    error_message = None
+    if report.failed and getattr(report, "longreprtext", None):
+        text = report.longreprtext
+        lines = [ln.strip() for ln in text.splitlines() if ln.strip()]
+        if lines:
+            error_message = lines[-1][:1000]
+            # crude but useful extraction
+            if ":" in lines[-1]:
+                error_type = lines[-1].split(":", 1)[0][:200]
+
+    store.record_test_result(
+        run_id=run_id,
+        nodeid=report.nodeid,
+        outcome=outcome,
+        duration_s=getattr(report, "duration", None),
+        error_type=error_type,
+        error_message=error_message,
+    )
+
+    # also append to JSON summary
+    config._qa_metrics_summary["tests"].append(
+        {
+            "nodid": report.nodeid,
+            "outcome": outcome,
+            "duration_s": getattr(report, "duration", None),
+        }
+    )
+
+def pytest_sessionfinish(session, exitstatus):
+    store = getattr(session.config, "_qa_sql_store", None)
+    run_id = getattr(session.config, "_qa_run_id", None)
+    if store is not None and run_id is not None:
+        try:
+            store.finish_run(run_id=run_id, finished_at=utc_now-iso(), exit_status=int(exitstatus))
+        finally:
+            summary = session.config._qa_metrics_summmary
+            summary["finished_at"] = utc_now_iso()
+            summary["exitstatus"] = int(exitstatus)
+            Path("artifacts").mkdir(exist_ok=True)
+            (Path("artifacts") / "metrics_summary.json").write_text(
+                json.dump(summary, indent=2),
+                encoding="utf-8",
+            )
+            store.close()
 
 def _wait_for_udp_ready(host: str, port: int, timeout_s: float = 5.0) -> None:
     deadline = time.time() + timeout_s
@@ -118,15 +276,33 @@ def simulator_process():
         "--log-level", "info",
     ]
 
+    #p = subprocess.Popen(
+    #    cmd,
+    #    cwd=str(REPO_ROOT),
+    #    env=env,
+    #    stdout=subprocess.PIPE,
+    #    stderr=subprocess.STDOUT,
+    #    text=True,
+    #    bufsize=1,
+    #    creationflags=subprocess.CREATE_NEW_PROCESS_GROUP,
+    #)
+
+    creationflags = 0
+    popen_kwargs = {}
+    
+    if os.name == "nt":
+        creationflags = subprocess.CREATE_NEW_PROCESS_GROUP
+        popen_kwargs["creationfalgs"] = creationflags
+    else:
+        # start in a new session on  Unis so teardown can kill the whole process group if needed
+        popen_kwargs["start_new_session"] = True
+    
     p = subprocess.Popen(
         cmd,
-        cwd=str(REPO_ROOT),
-        env=env,
         stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT,
         text=True,
-        bufsize=1,
-        creationflags=subprocess.CREATE_NEW_PROCESS_GROUP,
+        **popen_kwargs,
     )
 
     try:
@@ -222,19 +398,48 @@ def _artifact_dir() -> Path:
 @pytest.fixture
 def metrics_recorder(request):
     """
-    Usage:
-        metric_recorder({
-            "name": "delay_envelope_udp_ping",
-            "p50_ms", 123.4,
-            ...
-        })
-    writes one JSON file per test
+    records structured metrics for a test:
+    -   writes JSON artifacts to artifacts/metric/<test>.json
+    -   writes falttened numeric metrics into SQLite perf_metrics
+
     """
     start = time.time()
     records = []
+
+    config = request.config
+    store = getattr(config, "_qa_sql_store", None)
+    run_id = getattr(config, "_qa_run_id", None)
+
+
     def record(payload: dict):
         records.append(payload)
 
+        if store is not None and run_id is not None:
+            for metric_name, metric_value, unit, tags in _flatten_metrics_record(payload):
+                store.record_metric(
+                    run_id=run_id,
+                    nodeid=request.node.nodeid,
+                    metric_name=metric_name,
+                    metric_value=metric_value,
+                    unit=unit,
+                    tags=tags,
+                )
+            # optional: persist retry event rows if payload includes detailed events
+            retry = payload.get("retry") or {}
+            for ev in retry.get("events", []) or []:
+                # expected ev shape: {"request_name", "attempt", "sleep_s", "error"}
+                try:
+                    store.record_retry_event(
+                        run_id=run_id,
+                        nodeid=request.node.nodeid,
+                        request_name=ev.get("request_name"),
+                        attempt_number=int(ev.get("attempt", 0)),
+                        sleep_s=float(ev.get("sleep_s", 0.0)),
+                        exception_type=str(ev.get("error", "Exception")),
+                    )
+                except Exception:
+                    # don't let telemetry break tests
+                    pass
     yield record
 
     # write on teardown (even if test failed, if fixture teardown runs)
@@ -246,7 +451,7 @@ def metrics_recorder(request):
         "records": records,
     }
 
-    out_path = _artifact_dir() / f"{test_id}.json"
+    out_path = _metrics_artifact_dir() / f"{test_id}.json"
     out_path.write_text(json.dumps(out, indent=2), encoding="utf-8")
 
 def pytest_sessionstart(session):
