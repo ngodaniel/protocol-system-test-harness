@@ -100,7 +100,7 @@ class SqlStore:
         branch: str | None,
         ci_job: str | None,
         os_name: str,
-        python_version:s str,
+        python_version: str,
     ) -> None:
         sql = """
         INSERT INTO test_runs (
