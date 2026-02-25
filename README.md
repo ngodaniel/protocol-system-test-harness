@@ -1,61 +1,99 @@
+
 ## Overview
-This repository implements a system-level test harness for a simulated embedded device that exposes both control-plane and data-plane interfaces. The project is intentionally designed to resemble real-world validation environments used for FPGA, ASIC, and firmware-adjacent systems rather than a simplified unit-test demo.
+
+This repository implements a **system-level test harness** for a simulated embedded device with separated control-plane and date-plane interfaces.
+
+It's designed to resemble real-world validation environments used for.
+- FPGA / ASIC bring-up
+- firmware-adjacent integration testing
+- protocol verification
 
 The harness validates:
-- Cross-protocol behavior (HTTP control →  UDP runtime effects)
-- Stateful protocol interactions
-- Fault handling under packet loss, delay, and corruption
-- Client-side retry policy correctness
-- Deterministic corruption detection via CRC
+- **Cross-protocol behavior** (HTTP control → UDP/TCP runtime effects)
+- **Stateful protocol interactions**
+- **Fault handling** under packet loss, delay, and corruption
+- **Client-side retry policy correctness**
+- **Deterministic corruption detection** via CRC-framed binary messages
+
 
 ## System Under Test
 The System Under Test (SUT) is a simulated device that models a stateful embedded component.
 
 ### Device Characteristics
 - Maintains explicit internal state (`IDLE`, `CONFIGURED`, `STREAMING`)
-- Accepts control commands via HTTP
-- Process time-sensitive protocol commands via UDP
-- Supports fault injection to emulate degraded hardware behavior.
+- Accepts control commands via HTTP (FastAPI)
+- Processes protocol commands via:
+	- **UDP** (datagram)
+	- **TCP** (stream, framed)
+- Supports fault injection to emulate degraded hardware/network behavior.
 
-### Exposed Interfaces
-#### Control Panel (HTTP / FastAPI)
-- `/health` -- liveness and state reporting
-- `/control/reset` -- reset device state
-- `/control/configure` -- transition to configured state
-- `/control/faults` -- inject drop, delay, and corruption faults
 
-##### Data Plane (UDP / Binary Protocol)
+## Exposed Interfaces
+### Control Panel (HTTP / FastAPI)
+
+The simulator exposes a control API for health, state transition, and fault injection.
+
+#### Key endpoints
+- `GET /health` -- liveness + current state
+- `GET /status` -- state + reset count + current fault config
+- `POST /control/reset` -- reset device state
+- `POST /control/configure` -- transition to `CONFIGURED`
+- `POST /control/stream/start` -- transition to `STREAMING`
+- `POST /control/stream/stop` -- stop streaming
+- `POST /control/faults` -- set drop/delay/corruption faults
+- `GET /control/faults` -- read current fault settings
+
+#### UI
+- `GET /ui` -- simple web UI for manual interaction
+- Static assets served under `/ui/static`
+
+---
+
+### Data Plane (Binary Protocol over UDP/TCP)
+
+Both UDP and TCP use the same binary framing contract:
+```text
+MAGIC | VERSION | TYPE | LENGTH | PAYLOAD | CRC32
+```
+#### Supported request types:
 - `PING` -- connectivity check
 - `STATUS` -- current device state
 - `START`/`STOP` -- state transitions enforced by protocol rules
+
+#### Responses include:
+- OK / state payloads
+- protocol errors (e.g., bad state)
+- CRC-detectable corruption failures when fault injection is enabled
 ## Architecture
 The project is split into three primary layers:
 ```perl
 ┌────────────────────────────┐
 │        Test Layer          │
-│  (pytest smoke/system)     │
+│   (pytest smoke/system)    │
 └─────────────▲──────────────┘
               │
 ┌─────────────┴──────────────┐
-│     QA Harness Layer       │
+│      QA Harness Layer      │
 │  - HTTP client             │
 │  - UDP client              │
+│  - TCP client              │
 │  - Framing / CRC           │
 │  - Retry policy            │
 └─────────────▲──────────────┘
               │
 ┌─────────────┴──────────────┐
-│      Device Simulator      │
+│     Device Simulator       │
 │  - FastAPI control plane   │
 │  - asyncio UDP protocol    │
+│  - asyncio TCP server      │
 │  - state machine           │
 │  - fault injection         │
 └────────────────────────────┘
 ```
 This separation mirrors production test stacks, where:
-- Test logic never talks directly to device internals
+- Test logic does **not** talk directly to device internals
 -  Protocol behavior is validated externally 
-- Faults are injected through supported interfaces only
+- Faults are injected only through supported interfaces 
 
 ## Quick Start
 ### Requirements
@@ -65,30 +103,47 @@ This separation mirrors production test stacks, where:
 ### Setup
 ```bash
 python -m venv .venv
-source .venv/bin/activate	# windows: .\.venv\Scripts\Activate.ps1
-pip install -e ".[dev]
+
+# Linux / macOS
+source .venv/bin/activate
+
+# Windows PowerShell
+.\.venve\Scripts\Activate.ps1
+
+pip install -e ".[test]"
 ```
 No Docker or external services are required
 
+## Running the Simulator UI
+### Start the Simulator:
+```bash
+uvicorn services.device_sim.app.main:app --reload
+```
+### Open the UI in your browser:
+- `http://127.0.0.1:8000/ui
+### Health check:
+- `http://127/0.0.1:8000/health
+
 ## Running Tests
-### Smoke Tests (fast, availability-focused)
+### Smoke Tests (fast / availability-focused)
 ```bash
 pytest -m smoke
 ```
 Smoke tests validate:
-- Simulator startup
+- simulator startup
 - HTTP availability
-- Basic UDP connectivity
+- basic UDP connectivity
 
 ### System Tests (behavioral, fault-aware)
 ```bash
 pytest -m system
 ```
 System tests validate:
-- Cross-protocol state transitions
-- Retry behavior under packet loss
-- CRC-based corruption detection
-- Delay handling without blocking the event loop
+- cross-protocol state transitions 
+- retry behavior under packet loss
+- CRC-based corrupt detection
+- delay handling without blocking the event loop
+- framed protocol behavior over UDP/TCP
 
 ### Full Test Suite
 ```bash
@@ -100,9 +155,9 @@ Fault inject is a **first-class feature** of the simulator and is intentionally 
 ### Support Faults
 | Fault Type | Effect |
 |--|--|
-| Drop | Packet is silently discarded |
+| Drop | Packet/response is silently discarded |
 | Delay | Response is delayed without blocking the event loop |
-| Corruption | Response payload is altered, causing CRC failure |
+| Corruption | Response bytes are modified after encoding (CRC mismatch) |
 #### Example
 ```python
 sim_api.set_faults(
@@ -111,160 +166,97 @@ sim_api.set_faults(
 	corrupt_rate=0.0,
 )
 ```
-Faults persist across tests unless explicitly reset, modeling real-world misconfiguration scenarios.
-
-## Reports & Artifacts
-The harness produces machine-readable and human-readable artifact.
-### Generated Outputs
-- JUnit XML (`junit-*.xml`) for CI systems
-- HTML test reports (optional)
-- Simulator logs on failure
-
-Artifacts are written to: `artifacts/`
-This directory is ignored by git but uploaded automatically in CI.
-
-## CI Pipeline
-The CI pipeline is implemented using GitHub Actions and enforced quality gates.
-### Pull Requests
-- Lint (`ruff`)
-- Type checks (`mypy`)
-- Smoke test only (fast feedback)
-### Main Branch
-- Full system test suite
-- Multi-OS (Windows + Linux)
-- Multi-Python version matrix
-- Artifact upload for debugging
-### Nightly (optional)
-- Full regression
-- Artifact retention
-- Flake and performance analysis ready
-
-This mirrors how real hardware test pipelines separate PR validation from full regression
-## Design Decisions
-This project was intentionally designed to model real-world system-level testing challenges encountered in embedded, FPGA, and hardware-adjacent environments. The following decisions reflect tradeoffs commonly made in production test harnesses rather than simplified demo code.
-
-The decisions documented below reflect real tradeoffs made in production test harnesses rather than simplified demo implementations. Emphasis is placed on determinism, diagnosability, and platform realism
-
-### 1. Separation of Control Plane and Data Plane
-#### Decision: 
-The simulator exposes:
-
- - **HTTP (FastAPI)** for control and configuration
- - **UDP** for time-critical, protocol-level communication
-
-#### Rationale:
-In real systems, control and data paths are often separated:
-- Control plane: configuration, reset, fault injection, health checks
-- Data plane: low-latency, state-dependent communication
-This separation allows:
-- Independent testing of configuration vs. runtime behavior
-- Realistic failure scenarios (e.g., data path misbehaves while control plane is healthy)
-- Cross-protocol state validation (HTTP → UDP behavior)
-
-### 2. Binary Framing Instead of Plaintext UDP
-#### Decision:
-All UDP traffic uses an explicit binary frame:
-
-```pgsql
-MAGIC | VERSION | TYPE | LENGTH | PAYLOAD | CRC32
+#### Read current faults
+```bash
+curl http://127.0.0.1:8000/control/faults
 ```
 
-#### Rationale:
-Plaintext UDP masks many real defects. Binary framing enables:
-- Deterministic corruption detection (CRC mismatch)
-- Explicit protocol versioning
-- Clear separation between transport errors and application errors
+## Reports & Artifacts
+The harness is designed to generate CI-friendly artifacts under `artifacts/`:
+- JUnit XML reports
+- HTML reports (optional)
+- simulator logs (on failure)
+- performance metrics JSON (if enabled)
+- SQLite test telemetry DB (`artifacts/results.db`)
 
-This mirrors real embedded protocols used over UART, SPI, Ethernet, or proprietary links.
+This directory is safe to upload from CI jobs for debugging and trend analysis.
 
-### 3. CRC-Based Corruption Detection (Not Heuristics)
-#### Decision:
-Corruption is detected via **CRC32 validation**, not string inspection or sentinel bytes
-#### Rationale:
-Heuristic corruption detection (e.g., checking for invalid characters) produce false positives and hides edge cases. CRC:
-- Detects single-bit and multi-bit corruption
-- Enables deterministic test assertions
-- Cleanly separates corruption from packet loss
+## CI Pipeline
+The CI pipeline (GitHub Actions) is structured to mirror production QA workflows.
 
-Tests explicitly expect CRC failures when corruption is injected.
+### Recommended stages
+#### Pull Requests
+- lint (`ruff`)
+- type checks (`mypy`)
+- smoke tests only (fast feedback)
+- artifact upload on failure
+#### Main Branch
+- full system suite
+- multi-OS / multi-Python matrix
+- coverage + threshold gate
+- artifact upload (`artifacts/`)
+#### Perf / Envelope job
+- targeted performance envelope tests
+- env-tunable thresholds (p50/p95, success rate)
+- metrics artifact upload
+#### Nightly
+- longer-run regression
+- larger perf sample sizes
+- flake/perf trend collection
 
-### 4. Fault Injection as First-Class Concept
-#### Desision:
-Faults are modeled explicitly and independently:
-- Packet drop
-- Packet delay
-- Packet corruption
-#### Rationale:
-Real systems fail in different ways, and test logic must distinguish them:
-- Drop → retryable
-- Delay → timing-sensitive
-- Corruption → non-retryable, must be detected
+## SQL Telemetry
+This project is a strong fit for SQL-backed test observability.
 
-Faults persists until cleared to model misconfigured or degraded hardware
+A recommended pattern is to persist test telemetry to SQLite (later portable to Postgres):
 
-### 5. Retry Logic Is Client-Side and Policy-Driven
-#### Decision:
-Retry behavior lives in client, not the simulator, and is governed by a `RetryPolicy`.
-#### Rationale:
-In production systems:
-- Devices do not retry on behalf of clients
-- Retry strategies vary by use case
+### Suggested tables
+- `test_runs`
+- `test_results`
+- `perf_metrics`
+- `retry_events`
+#### This supports:
+- flaky test analysis
+- latency trend tracking (p50/p95)
+- retry pattern analysis under fault injection
+- historical CI run comparisons
+#### Artifacts can include:
+- `artifacts/results.db`
+- `artifacts/metrics/*.json`
 
-This allows tests to assert:
-- Correct retry behavior under packet loss
-- No retries on deterministic failures (e.g., CRC mismatch)
+## Design Decisions
+This project intentionally models real system-level testing constraints instead of a simplified unit-test demo.
 
-### 6. Async-Safe UDP Handling (No Blocking)
-#### Decision:
-The UDP protocol handler:
-- Never blocks the event loop
-- Uses immediate sends or schedules callbacks (`call_later`)
-- Avoids `time.sleep` entirely
-#### Rationale:
-Blocking the event loop causes cross-protocol failures (UDP delays freezing HTTP).
-The chosen approach ensures:
-- HTTP and UDP remain responsive under fault injection
-- Platform-safe behavior (Windows and Linux)
+### 1. Control plane vs data plane separation
+- HTTP handles configuration, reset, fault injection, health
+- UDP/TCP handles runtime protocol behavior
 
-### 7. State Mutation After Response Decision
-#### Decision:
-Protocol handlers determines the response **before mutating system state**.
-#### Rationale:
-This avoids subtle race conditions where:
-- State changes interfere with response emission
-- Cross-protocol interactions (HTTP + UDP) create timing bugs
+This enables realistic cross-protocol validation (e.g., HTTP state change reflected in protocol responses)
 
-This pattern is common in firmware and protocol stacks where determinism is critical
+### 2. Binary framing instead of plaintext
+All protocol traffic is framed and CRC-protected to support:
+- deterministic corruption detection
+- protocol versioning
+- strict parsing behavior
 
-### 8. Test Layering Strategy
-#### Decision:
-Tests are intentionally layered:
-- Smoke tests → availability and basic connectivity
-- System tests → cross-protocol behavior, state transitions, fault handling 
-#### Rationale:
-Smoke tests must remain stable as APIs evolve.
-Behavioral and contract validation belongs in system tests
+### 3. Fault injection as a first-class capability
+Drop, delay, and corruption are independently configurable and persistent until reset.
+This models real degraded-system behavior and supports meaningful retry/corruption tests.
 
-This separation mirrors production CI pipelines
+### 4. Retry logic is client-side and policy driven
+Retry behavior in the harness client, not the simulator, which reflects production design and allows targeted assertions.
 
-### 9. Windows-First Development Assumption
-#### Decision:
-The harness explicitly supports Windows:
-- Uvicorn launched as a subprocess
-- No reliance on POSIX-only signals
-- Async patterns validated on Windows event loop
-#### Rationale:
-Many hardware and FPGA test environments run on Windows.
-Designing for Windows first exposes async and subprocess edge cases often missed on Linux
+### 5. Async-safe protocol handling
+The simulator avoids blocking behavior in protocol handlers, which protects HTTP responsiveness even under delay faults.
 
-### 10. Why a Simulator Instead of Mocks
-#### Decision
-A real simulation process is used instead of mocking network calls.
-#### Rationale:
-Mocks cannot reproduce
-- Timing issues
-- Event loop starvation
-- UDP packet loss behavior
-- Cross-protocol race conditions
+### 6. Simulator over mocks
+A real process and real sockets are used because mocks do not reproduce:
+- timing issues
+- event-loop starvation
+- packet loss / corruption behavior
+- cross-protocol race conditions
 
-The simulator enables **system-level failure modes**, which is the primary goal of of this project.
+## Current Status / Next Enhancements
+Recent additions already present in the simulator include:
+- TCP protocol support (framed, retry-capable client)
+- `/ui` web interface
+- `GET /control/faults
