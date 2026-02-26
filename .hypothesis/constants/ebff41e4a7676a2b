@@ -1,0 +1,4 @@
+# file: C:\Users\ngoda\protocol-system-test-harness\src\qaharness\reporting\sql_store.py
+# hypothesis_version: 6.151.9
+
+['QA_RESULTS_DB', 'artifacts/results.db']

@@ -1,0 +1,4 @@
+# file: C:\Users\ngoda\protocol-system-test-harness\src\qaharness\utils\retry.py
+# hypothesis_version: 6.151.9
+
+[0.0, 0.05, 0.25, 1.0, 2.0, 'T', 'attempt must be >= 1']

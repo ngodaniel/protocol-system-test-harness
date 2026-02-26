@@ -1,0 +1,4 @@
+# file: C:\Users\ngoda\protocol-system-test-harness\src\qaharness\reporting\__init__.py
+# hypothesis_version: 6.151.9
+
+['SqlStore', 'SqlStoreConfig']
