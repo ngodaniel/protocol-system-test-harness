@@ -306,7 +306,7 @@ def simulator_process():
     
     if os.name == "nt":
         creationflags = subprocess.CREATE_NEW_PROCESS_GROUP
-        popen_kwargs["creationfalgs"] = creationflags
+        popen_kwargs["creationflags"] = creationflags
     else:
         # start in a new session on  Unis so teardown can kill the whole process group if needed
         popen_kwargs["start_new_session"] = True
