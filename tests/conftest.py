@@ -50,7 +50,7 @@ def _flatten_metrics_record(record: dict) -> list[tuple[str, float | int | None,
 
     # generic top-level numeric values
     for k, v in record.items():
-        if isisntance(v, (int, float)) and not isinstance(v, bool):
+        if isinstance(v, (int, float)) and not isinstance(v, bool):
             rows.append((k, v, None, base_tags))
 
     # result block
@@ -62,7 +62,7 @@ def _flatten_metrics_record(record: dict) -> list[tuple[str, float | int | None,
     # latency block
     for k, v in (record.get("latency_ms") or {}).items():
         if isinstance(v, (int, float)) and not isinstance(v, bool):
-            unit = "ms" if kk not in ("count",) else None
+            unit = "ms" if k not in ("count",) else None
             rows.append((f"latency.{k}", v, unit, base_tags))
 
     # retry block (aggregate stats)
@@ -75,7 +75,7 @@ def _flatten_metrics_record(record: dict) -> list[tuple[str, float | int | None,
             rows.append((f"retry.{k}", v, unit, base_tags))
     return rows
 
-def pytest_sessionstart(sessions):
+def pytest_sessionstart(session):
     global _QA_SQL_STORE, _QA_RUN_ID, _QA_SEEN_CALL_REPORTS, _QA_METRICS_SUMMARY
 
     store = SqlStore()
@@ -100,10 +100,10 @@ def pytest_sessionstart(sessions):
     _QA_SEEN_CALL_REPORTS = set()
 
     # optional summary json (nice alongside DB)
-    Path("artifacts").mkdir(exist_ok=True)
+    Path("artifacts").mkdir(exist_ok=True
     session.config._qa_metrics_summary = {
         "run_id": run_id,
-        "started_at": _utc_now_is(),
+        "started_at": _utc_now_iso(),
         "tests": [],
         "db_path": str(store.db_path),
     }
@@ -176,7 +176,7 @@ def pytest_sessionfinish(session, exitstatus):
 
     if store is not None and run_id is not None:
         try:
-            store.finish_run(run_id=run_id, finished_at=utc_now-iso(), exit_status=int(exitstatus))
+            store.finish_run(run_id=run_id, finished_at=utc_now_iso(), exit_status=int(exitstatus))
         finally:
             if summary is not None:
                 summary["finished_at"] = _utc_now_iso()
@@ -467,14 +467,6 @@ def metrics_recorder(request):
     out_path = _metrics_artifact_dir() / f"{test_id}.json"
     out_path.write_text(json.dumps(out, indent=2), encoding="utf-8")
 
-def pytest_sessionstart(session):
-    d = Path("artifacts")
-    d.mkdir(exist_ok=True)
-    session.config._qa_metrics_summary = {
-        "started_at": time.time(),
-        "tests": [],
-    }
-
 @pytest.hookimpl(hookwrapper=True)
 def pytest_runtest_call(item):
     t0 = time.time()
@@ -485,10 +477,3 @@ def pytest_runtest_call(item):
         "duration_s": dt,
         "status": "passed" if outcome.excinfo is None else "failed",
     })
-
-def pytest_sessionfinish(session, exitstatus):
-    summary = session.config._qa_metrics_summary
-    summary["finished_at"] = time.time()
-    summary["existatus"] = exitstatus
-    out = Path("artifacts") / "metrics_summary.json"
-    out.write_text(json.dumps(summary, indent=2), encoding='utf-8')

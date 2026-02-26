@@ -23,10 +23,10 @@ class SqlStore:
     Tiny sqlite-backed telemetry store for test runs/results/perf metrics
     Thread-safe enough for local pytest usage via an internal lock
     """
-    def __init__(self, ocnfig: SqlStoreConfig | None = None):
+    def __init__(self, config: SqlStoreConfig | None = None):
         self._cfg = config or SqlStoreConfig(db_path=_default_db_path())
         self._lock = threading.Lock()
-        self._conn = sqlite3.connect(str(self._cfg.db_path, check_same_thread=False))
+        self._conn = sqlite3.connect(str(self._cfg.db_path), check_same_thread=False)
         self._conn.row_factory = sqlite3.Row
 
         with self._conn:
@@ -53,7 +53,7 @@ class SqlStore:
             ci_job TEXT,
             os_name TEXT,
             python_version TEXT,
-            exist_status INTEGER
+            exit_status INTEGER
         );
 
         CREATE TABLE IF NOT EXISTS test_results (
@@ -114,10 +114,10 @@ class SqlStore:
                 (run_id, started_at, git_sha, branch, ci_job, os_name, python_version),
             )
     
-    def finish_run(self, *, run_id:str, finished_at: str, exist_status: int) -> None:
+    def finish_run(self, *, run_id:str, finished_at: str, exit_status: int) -> None:
         sql = """
         UPDATE test_runs
-        SET finished_at = ?, exist_status = ?
+        SET finished_at = ?, exit_status = ?
         WHERE run_id = ?
         """
 
