@@ -68,15 +68,30 @@ class SqlStore:
             FOREIGN KEY (run_id) REFERENCES test_runs(run_id)
         );
 
-        CREATE INDEX IF NOT EXISTS idx_perf_metrics_run_id ON perf_metrics(run_id);
-        CREATE INDEX IF NOT EXISTS idx_perf_metrics_nodeid ON perf_metrics(nodeid);
-        CREATE INDEX IF NOT EXISTS idx_perf_metrics_name ON perf_metrics(metric_name);
+        CREATE INDEX IF NOT EXISTS idx_test_results_run_id ON perf_metrics(run_id);
+        CREATE INDEX IF NOT EXISTS idx_test_results_nodeid ON perf_metrics(nodeid);
 
-        CREATE TABLE IF NOT EXISTS retry_events (
+        CREATE TABLE IF NOT EXISTS perf_metrics (
             id INTEGER PRIMARY KEY AUTOINCREMENT
             run_id TEXT NOT NULL,
             nodeid TEXT NOT NULL,
-            request_name TEXT,
+            metric_name TEXT NOT NULL,
+            metric_value REAL,
+            unit TEXT,
+            tags_JSON TEXT,
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (run_id) REFERENCES test_runs(run_id)
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_retry_events_run_id ON retry_events(run_id);
+        CREATE INDEX IF NOT EXISTS idx_retry_events_nodeid ON retry_events(nodeid);
+        CREATE INDEX IF NOT EXISTS idx_perf_metrics_name ON perf_metrics(metric_name);
+
+        CREATE TABLE IF NOT EXISTS retry_events (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            run_id TEXT NOT NULL,
+            node_id TEXT NOT NULL,
+            equest_name TEXT,
             attempt_number INTEGER,
             sleep_s REAL,
             exception_type TEXT,
@@ -84,8 +99,8 @@ class SqlStore:
             FOREIGN KEY (run_id) REFERENCES test_runs(run_id)
         );
 
-        CREATE INDEX IF NOT EXISTS idx_retry_events_run_id ON retry_events(run_id);
-        CREATE INDEX IF NOT EXISTS idx_retry_events_nodeid ON retry_events(nodeid);
+        CREATE INDEX IF NOT EXISTS idx_retry_events_run_id ON retry_events(run_id)
+        CREATE INDEX IF NOT EXISTS idx_retry_events_nodeid ON retry_events(nodeid)
         """
 
         with self._lock, self._conn:
