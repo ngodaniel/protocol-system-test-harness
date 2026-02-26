@@ -99,8 +99,8 @@ class SqlStore:
             FOREIGN KEY (run_id) REFERENCES test_runs(run_id)
         );
 
-        CREATE INDEX IF NOT EXISTS idx_retry_events_run_id ON retry_events(run_id)
-        CREATE INDEX IF NOT EXISTS idx_retry_events_nodeid ON retry_events(nodeid)
+        CREATE INDEX IF NOT EXISTS idx_retry_events_run_id ON retry_events(run_id);
+        CREATE INDEX IF NOT EXISTS idx_retry_events_nodeid ON retry_events(nodeid);
         """
 
         with self._lock, self._conn:
