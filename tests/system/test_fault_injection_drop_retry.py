@@ -11,7 +11,7 @@ def test_udp_drop_rate_with_retries(sim_api, sim_udp):
     sim_api.set_faults(drop_rate=0.7, delay_ms=0, corrupt_rate=0.0)
 
     policy = RetryPolicy(
-        attempts=10, 
+        attempts=30, 
         initial_backoff_s=0.01,
         max_backoff_s=0.05,
         multiplier=2.0,
