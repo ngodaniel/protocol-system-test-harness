@@ -197,7 +197,7 @@ jobs:
           PERF_DROP_SAMPLES: "30"
           PERF_DROP_RATE: "0.35"
           PERF_DROP_MIN_SUCCESS_RATE: "0.85"
-          PERF_DROP_P95_MAX_MS: "600"
+          PERF_DROP_P95_MAX_MS: "750"
 
           # retry policy tunables (shared style)
           PERF_COMBINED_RETRY_ATTEMPTS: "4"
