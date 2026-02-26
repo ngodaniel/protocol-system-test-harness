@@ -364,7 +364,7 @@ def sim_api(settings):
 
 @pytest.fixture
 def sim_udp(settings):
-    return UdpClient(UdpEndpoint(settings.sim_udp_host, settings.sim_udp_port))
+    return UdpClient(UdpEndpoint(settings.sim_udp_host, settings.sim_udp_port), timeout_s=0.15)
 
 @pytest.fixture
 def sim_udp_perf(settings):
