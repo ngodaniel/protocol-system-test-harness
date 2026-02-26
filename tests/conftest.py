@@ -100,7 +100,7 @@ def pytest_sessionstart(session):
     _QA_SEEN_CALL_REPORTS = set()
 
     # optional summary json (nice alongside DB)
-    Path("artifacts").mkdir(exist_ok=True
+    Path("artifacts").mkdir(exist_ok=True)
     session.config._qa_metrics_summary = {
         "run_id": run_id,
         "started_at": _utc_now_iso(),
