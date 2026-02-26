@@ -68,7 +68,7 @@ class SqlStore:
             FOREIGN KEY (run_id) REFERENCES test_runs(run_id)
         );
 
-        CREATE INDEX IF NOT EXISTS idx_perf_metrics_run_id ON per_metrics(run_id);
+        CREATE INDEX IF NOT EXISTS idx_perf_metrics_run_id ON perf_metrics(run_id);
         CREATE INDEX IF NOT EXISTS idx_perf_metrics_nodeid ON perf_metrics(nodeid);
         CREATE INDEX IF NOT EXISTS idx_perf_metrics_name ON perf_metrics(metric_name);
 
