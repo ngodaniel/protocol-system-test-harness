@@ -176,7 +176,7 @@ def pytest_sessionfinish(session, exitstatus):
 
     if store is not None and run_id is not None:
         try:
-            store.finish_run(run_id=run_id, finished_at=utc_now_iso(), exit_status=int(exitstatus))
+            store.finish_run(run_id=run_id, finished_at=_utc_now_iso(), exit_status=int(exitstatus))
         finally:
             if summary is not None:
                 summary["finished_at"] = _utc_now_iso()

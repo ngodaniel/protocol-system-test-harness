@@ -59,7 +59,7 @@ class SqlStore:
         CREATE TABLE IF NOT EXISTS test_results (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             run_id TEXT NOT NULL,
-            nodid TEXT NOT NULL
+            nodid TEXT NOT NULL,
             outcome TEXT NOT NULL,
             duration_s REAL,
             error_type TEXT,
@@ -77,7 +77,7 @@ class SqlStore:
             run_id TEXT NOT NULL,
             nodeid TEXT NOT NULL,
             request_name TEXT,
-            attempt_number INTEGER
+            attempt_number INTEGER,
             sleep_s REAL,
             exception_type TEXT,
             created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
