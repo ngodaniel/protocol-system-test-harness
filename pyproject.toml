@@ -29,3 +29,8 @@ markers = [
   "system: system/integration tests that exercise simulator + protocol behavior",
   "smoke: fast smoke tests",
 ]
+
+[tool.mypy]
+python_version = "3.11"
+files = ["src/qaharness"]
+exclude = "(^|/)(\\.venv|build|dist|.*\\.egg-info)/"

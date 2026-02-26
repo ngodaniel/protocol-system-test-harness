@@ -59,7 +59,7 @@ class SqlStore:
         CREATE TABLE IF NOT EXISTS test_results (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             run_id TEXT NOT NULL,
-            nodid TEXT NOT NULL,
+            nodeid TEXT NOT NULL,
             outcome TEXT NOT NULL,
             duration_s REAL,
             error_type TEXT,

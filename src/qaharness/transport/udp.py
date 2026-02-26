@@ -15,7 +15,7 @@ class UdpClient:
         self._endpoint = endpoint
         self._timeout_s = timeout_s
 
-    def request_once(self, msg_type: int, payload: bytes = b"", recv_buf: int = 4096) -> bytes:
+    def request_once(self, msg_type: int, payload: bytes = b"", recv_buf: int = 4096) -> tuple[int, bytes]:
         pkt = encode_frame(msg_type, payload)
 
         sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -30,7 +30,7 @@ class UdpClient:
         frame = decode_frame(data)
         return frame.msg_type, frame.payload # tuple
 
-    def request(self, msg_type, payload: bytes = b"", *, policy: RetryPolicy | None = None) -> bytes:
+    def request(self, msg_type, payload: bytes = b"", *, policy: RetryPolicy | None = None) -> tuple[int, bytes]:
         if policy is None:
             return self.request_once(msg_type, payload)
         return with_retries(lambda: self.request_once(msg_type, payload), policy)
