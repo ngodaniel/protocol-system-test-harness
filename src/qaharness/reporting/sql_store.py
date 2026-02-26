@@ -72,7 +72,7 @@ class SqlStore:
         CREATE INDEX IF NOT EXISTS idx_test_results_nodeid ON test_results(nodeid);
 
         CREATE TABLE IF NOT EXISTS perf_metrics (
-            id INTEGER PRIMARY KEY AUTOINCREMENT
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
             run_id TEXT NOT NULL,
             nodeid TEXT NOT NULL,
             metric_name TEXT NOT NULL,
@@ -88,9 +88,9 @@ class SqlStore:
         CREATE INDEX IF NOT EXISTS idx_perf_metrics_name ON perf_metrics(metric_name);
 
         CREATE TABLE IF NOT EXISTS retry_events (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            id INTEGER PRIMARY KEY AUTOINCREMENT,   
             run_id TEXT NOT NULL,
-            node_id TEXT NOT NULL,
+            nodeid TEXT NOT NULL,
             equest_name TEXT,
             attempt_number INTEGER,
             sleep_s REAL,
