@@ -68,8 +68,8 @@ class SqlStore:
             FOREIGN KEY (run_id) REFERENCES test_runs(run_id)
         );
 
-        CREATE INDEX IF NOT EXISTS idx_test_results_run_id ON perf_metrics(run_id);
-        CREATE INDEX IF NOT EXISTS idx_test_results_nodeid ON perf_metrics(nodeid);
+        CREATE INDEX IF NOT EXISTS idx_test_results_run_id ON test_results(run_id);
+        CREATE INDEX IF NOT EXISTS idx_test_results_nodeid ON test_results(nodeid);
 
         CREATE TABLE IF NOT EXISTS perf_metrics (
             id INTEGER PRIMARY KEY AUTOINCREMENT
@@ -83,8 +83,8 @@ class SqlStore:
             FOREIGN KEY (run_id) REFERENCES test_runs(run_id)
         );
 
-        CREATE INDEX IF NOT EXISTS idx_retry_events_run_id ON retry_events(run_id);
-        CREATE INDEX IF NOT EXISTS idx_retry_events_nodeid ON retry_events(nodeid);
+        CREATE INDEX IF NOT EXISTS idx_perf_metric_run_id ON perf_metrics(run_id);
+        CREATE INDEX IF NOT EXISTS idx_perf_metrics_nodeid ON retryperf_metrics_events(nodeid);
         CREATE INDEX IF NOT EXISTS idx_perf_metrics_name ON perf_metrics(metric_name);
 
         CREATE TABLE IF NOT EXISTS retry_events (
