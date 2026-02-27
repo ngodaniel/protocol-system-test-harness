@@ -4,8 +4,7 @@ import pytest
 from qaharness.transport import msgtypes as mt
 from qaharness.transport.framing import FrameError
 
-@pytest.mark.system
-def test_cross_protocol_state_and_faults(sim_api, sim_udp):
+def _cross_protocol_state_and_faults(sim_api, data_client):
     """
     example system level test
     - verify initial state over udp
@@ -18,23 +17,23 @@ def test_cross_protocol_state_and_faults(sim_api, sim_udp):
     assert http_status["state"] == "IDLE"
 
     #2) UDP status returns the same state (RESP_STATE + payload)
-    rtype, payload = sim_udp.status()
+    rtype, payload = data_client.status()
     assert rtype == mt.RESP_STATE
     assert payload == b"IDLE"
 
     #3) illegal UDP start while IDLE -> RESP_ERROR + BAD_STATE
-    rtype, payload = sim_udp.start()
+    rtype, payload = data_client.start()
     assert rtype == mt.RESP_ERR
     assert payload == b"BAD_STATE"
 
     #4) cross-protocol transition: configure via HTTP
     sim_api.configure()
-    rtype, payload = sim_udp.status()
+    rtype, payload = data_client.status()
     assert rtype == mt.RESP_STATE
     assert payload == b"CONFIGURED"
 
     # then start streaming via UDP (state mutates after response decision in simulator)
-    rtype, payload = sim_udp.start()
+    rtype, payload = data_client.start()
     assert rtype == mt.RESP_OK
     assert payload == b"STREAMING"
 
@@ -44,7 +43,7 @@ def test_cross_protocol_state_and_faults(sim_api, sim_udp):
     got_pong = False
     for _ in range(15):
         try:
-            rtype, payload = sim_udp.ping()
+            rtype, payload = data_client.ping()
             if (rtype, payload) == (mt.RESP_OK, b"PONG"):
                 got_pong = True
                 break
@@ -52,10 +51,16 @@ def test_cross_protocol_state_and_faults(sim_api, sim_udp):
             pass
         time.sleep(0.05)
 
-    assert got_pong, "Expected at least one successful UDP ping despite packet loss"
+    assert got_pong, f"Expected at least one successful {data_client} ping despite packet loss"
 
     #6) fault injection example: corruption -> CRC mismatch -> FrameError from decode_frame()
     sim_api.set_faults(drop_rate=0.0, delay_ms=0, corrupt_rate=1.0)
 
     with pytest.raises(FrameError):
-        sim_udp.ping()
+        data_client.ping()
+
+@pytest.mark.system
+def test_cross_protocol_state_and_faults(sim_api, data_client):
+    _cross_protocol_state_and_faults(sim_api, data_client)
+
+
