@@ -247,7 +247,7 @@ jobs:
       - name: Install Python deps
         run: |
           python -m pip install -U pip
-          python -m pip install -e .
+          python -m pip install -e ".[test]"
           python -m pip install ruff mypy pytest-html
 
       - name: Lint + type
