@@ -371,14 +371,12 @@ def sim_udp_perf(settings):
     return UdpClient(UdpEndpoint(settings.sim_udp_host, settings.sim_udp_port), timeout_s=0.2)
 
 @pytest.fixture(params=["udp", "tcp"], ids=["udp", "tcp"])
-def data_client(request, sim):  # sim starts the device simulator once
-    host = "127.0.0.1"
-    if request.param == "udp":
-        c = UdpClient(host=host, port=sim.udp_port)
-    elif request.param == "tcp":
-        c = TcpClient(host=host, port=sim.tcp_port)
+def data_client(request, sim_udp, sim_tcp):  # sim starts the device simulator once
+    c =  sim_udp if request.param == "udp" else sim_tcp
     yield c
-    c.close()
+    close = getattr(c, "close", None)
+    if callable(close):
+        close()
 @pytest.fixture(scope="function", autouse=True)
 def reset_simulator(sim_api):
     """
